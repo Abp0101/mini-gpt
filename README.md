@@ -4,6 +4,24 @@ MiniGPT is a small GPT-style decoder-only transformer language model built from 
 
 This is a portfolio project designed to show practical understanding of how GPT-like language models work internally.
 
+## Results
+
+I trained a 0.82M parameter version on the Tiny Shakespeare dataset for 1,200 steps.
+
+![Training loss curve](assets/loss_curve.png)
+
+| Step | Train loss | Validation loss |
+| ---: | ---: | ---: |
+| 0 | 4.2010 | 4.1996 |
+| 200 | 2.4937 | 2.4969 |
+| 400 | 2.3748 | 2.3757 |
+| 600 | 2.1899 | 2.2053 |
+| 800 | 2.0814 | 2.1080 |
+| 1000 | 2.0038 | 2.0585 |
+| 1199 | 1.9262 | 2.0300 |
+
+Example generated text is available in [docs/sample_shakespeare.txt](docs/sample_shakespeare.txt). The output is intentionally imperfect because this is a small character-level model trained locally, but it learns Shakespeare-like structure, names, spacing, and word patterns.
+
 ## Features
 
 - Character-level tokenizer
@@ -25,8 +43,14 @@ This is a portfolio project designed to show practical understanding of how GPT-
 mini-gpt/
   README.md
   requirements.txt
+  assets/
+    loss_curve.png
   data/
-    input.txt
+    shakespeare.txt
+    tiny_sample.txt
+  docs/
+    metrics.csv
+    sample_shakespeare.txt
   src/
     config.py
     dataset.py
@@ -48,33 +72,44 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Add Training Data
+## Training Data
 
-Place a plain text dataset at:
+This repo includes:
 
-```text
-data/input.txt
-```
+- `data/tiny_sample.txt` for quick smoke tests
+- `data/shakespeare.txt` for the portfolio training run
 
-Good first datasets:
+The Shakespeare dataset is public domain text commonly used for character-level language model experiments.
 
-- Shakespeare text
-- TinyStories
-- public domain books from Project Gutenberg
-- your own notes or writing
+You can also train on your own plain text file by passing `--data path/to/file.txt`.
 
-For copyrighted datasets, document the source and usage carefully.
+For copyrighted datasets, document the source and usage carefully before publishing results.
 
 ## Train
 
 ```bash
-python src/train.py
+python src/train.py --data data/shakespeare.txt
 ```
 
 For a quick smoke test:
 
 ```bash
 python src/train.py --data data/tiny_sample.txt --max-iters 20 --block-size 32 --batch-size 4 --eval-iters 2
+```
+
+Command used for the included training result:
+
+```bash
+python src/train.py \
+  --data data/shakespeare.txt \
+  --max-iters 1200 \
+  --block-size 64 \
+  --batch-size 32 \
+  --eval-iters 25 \
+  --eval-interval 200 \
+  --n-embd 128 \
+  --n-head 4 \
+  --n-layer 4
 ```
 
 The script automatically uses:
@@ -93,6 +128,19 @@ Generated text is written to:
 
 ```text
 outputs/sample.txt
+```
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Raw text] --> B[Character tokenizer]
+    B --> C[Token IDs]
+    C --> D[Token embedding + positional embedding]
+    D --> E[Transformer blocks]
+    E --> F[Final layer norm]
+    F --> G[Linear language-model head]
+    G --> H[Next-character logits]
 ```
 
 ## How It Works
@@ -133,3 +181,7 @@ Possible improvements:
 - Weights & Biases experiment tracking
 - Hugging Face model export
 - Streamlit or Gradio demo UI
+
+## License
+
+This project is released under the [MIT License](LICENSE).

@@ -5,4 +5,5 @@ __pycache__/
 outputs/*.pt
 outputs/*.png
 outputs/*.txt
+outputs/*.csv
 data/input.txt

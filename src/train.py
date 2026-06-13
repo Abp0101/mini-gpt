@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from pathlib import Path
 
 import torch
@@ -75,6 +76,11 @@ def main() -> None:
     parser.add_argument("--block-size", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--eval-iters", type=int, default=None)
+    parser.add_argument("--eval-interval", type=int, default=None)
+    parser.add_argument("--n-embd", type=int, default=None)
+    parser.add_argument("--n-head", type=int, default=None)
+    parser.add_argument("--n-layer", type=int, default=None)
+    parser.add_argument("--dropout", type=float, default=None)
     args = parser.parse_args()
 
     config = GPTConfig()
@@ -86,6 +92,16 @@ def main() -> None:
         config.batch_size = args.batch_size
     if args.eval_iters is not None:
         config.eval_iters = args.eval_iters
+    if args.eval_interval is not None:
+        config.eval_interval = args.eval_interval
+    if args.n_embd is not None:
+        config.n_embd = args.n_embd
+    if args.n_head is not None:
+        config.n_head = args.n_head
+    if args.n_layer is not None:
+        config.n_layer = args.n_layer
+    if args.dropout is not None:
+        config.dropout = args.dropout
 
     torch.manual_seed(config.seed)
     device = get_device()
@@ -128,8 +144,14 @@ def main() -> None:
         },
         checkpoint_path,
     )
+    metrics_path = Path("outputs/metrics.csv")
+    with metrics_path.open("w", newline="", encoding="utf-8") as metrics_file:
+        writer = csv.writer(metrics_file)
+        writer.writerow(["step", "train_loss", "val_loss"])
+        writer.writerows(history)
     plot_losses(history, Path("outputs/loss_curve.png"))
     print(f"Saved checkpoint to {checkpoint_path}")
+    print(f"Saved metrics to {metrics_path}")
     if plt is not None:
         print("Saved loss curve to outputs/loss_curve.png")
     else:
