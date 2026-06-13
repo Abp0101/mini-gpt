@@ -1,0 +1,13 @@
+The clock struck twelve, and the room grew quiet.
+Mira opened the notebook and wrote the first line of her machine.
+It did not think like a person, but it learned patterns from words.
+Each sentence became a trail, and each character became a step.
+
+The model guessed the next mark on the page.
+Sometimes it was wrong.
+Sometimes it surprised her.
+With every pass through the text, the guesses became a little sharper.
+
+By morning, Mira had built a small engine for language.
+It was not magic.
+It was data, attention, loss, and patience.
