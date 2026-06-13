@@ -6,7 +6,7 @@ from pathlib import Path
 import torch
 
 from dataset import CharTokenizer
-from model import GPTLanguageModel
+from model import GPTLanguageModel, migrate_legacy_attention_state_dict
 from train import get_device
 
 
@@ -25,7 +25,8 @@ def main() -> None:
     tokenizer = CharTokenizer(checkpoint["chars"])
 
     model = GPTLanguageModel(tokenizer.vocab_size, config).to(device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    state_dict = migrate_legacy_attention_state_dict(checkpoint["model_state_dict"], config)
+    model.load_state_dict(state_dict)
     model.eval()
 
     idx = torch.tensor([tokenizer.encode(args.prompt)], dtype=torch.long, device=device)

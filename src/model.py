@@ -7,41 +7,83 @@ from torch.nn import functional as F
 from config import GPTConfig
 
 
-class Head(nn.Module):
-    def __init__(self, n_embd: int, head_size: int, block_size: int, dropout: float) -> None:
-        super().__init__()
-        self.head_size = head_size
-        self.key = nn.Linear(n_embd, head_size, bias=False)
-        self.query = nn.Linear(n_embd, head_size, bias=False)
-        self.value = nn.Linear(n_embd, head_size, bias=False)
-        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        _, time_steps, _ = x.shape
-        k = self.key(x)
-        q = self.query(x)
-        weights = q @ k.transpose(-2, -1) * self.head_size**-0.5
-        weights = weights.masked_fill(self.tril[:time_steps, :time_steps] == 0, float("-inf"))
-        weights = F.softmax(weights, dim=-1)
-        weights = self.dropout(weights)
-        v = self.value(x)
-        return weights @ v
-
-
 class MultiHeadAttention(nn.Module):
     def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float) -> None:
         super().__init__()
         if n_embd % n_head != 0:
             raise ValueError("n_embd must be divisible by n_head.")
-        head_size = n_embd // n_head
-        self.heads = nn.ModuleList([Head(n_embd, head_size, block_size, dropout) for _ in range(n_head)])
+        self.n_head = n_head
+        self.head_size = n_embd // n_head
+        self.qkv = nn.Linear(n_embd, 3 * n_embd, bias=False)
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
+        self.register_buffer(
+            "tril",
+            torch.tril(torch.ones(block_size, block_size, dtype=torch.bool)),
+            persistent=False,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out = torch.cat([head(x) for head in self.heads], dim=-1)
+        batch, time_steps, channels = x.shape
+
+        # This is mathematically equivalent to running separate Q/K/V projections
+        # for each head, applying causal attention per head, and concatenating the
+        # outputs. The fused projection performs those independent head projections
+        # in one batched matrix multiply, then reshapes by head.
+        qkv = self.qkv(x)
+        q, k, v = qkv.chunk(3, dim=-1)
+        q = q.view(batch, time_steps, self.n_head, self.head_size).transpose(1, 2)
+        k = k.view(batch, time_steps, self.n_head, self.head_size).transpose(1, 2)
+        v = v.view(batch, time_steps, self.n_head, self.head_size).transpose(1, 2)
+
+        weights = q @ k.transpose(-2, -1) * self.head_size**-0.5
+        weights = weights.masked_fill(~self.tril[:time_steps, :time_steps], float("-inf"))
+        weights = F.softmax(weights, dim=-1)
+        weights = self.dropout(weights)
+        out = weights @ v
+        out = out.transpose(1, 2).contiguous().view(batch, time_steps, channels)
         return self.dropout(self.proj(out))
+
+
+def migrate_legacy_attention_state_dict(
+    state_dict: dict[str, torch.Tensor],
+    config: GPTConfig,
+) -> dict[str, torch.Tensor]:
+    """Convert old per-head attention checkpoints to the fused qkv format."""
+    migrated = dict(state_dict)
+    for layer_idx in range(config.n_layer):
+        prefix = f"blocks.{layer_idx}.sa"
+        qkv_key = f"{prefix}.qkv.weight"
+        if qkv_key in migrated:
+            continue
+
+        query_weights = []
+        key_weights = []
+        value_weights = []
+        for head_idx in range(config.n_head):
+            head_prefix = f"{prefix}.heads.{head_idx}"
+            query_key = f"{head_prefix}.query.weight"
+            key_key = f"{head_prefix}.key.weight"
+            value_key = f"{head_prefix}.value.weight"
+            if query_key not in migrated:
+                break
+            query_weights.append(migrated.pop(query_key))
+            key_weights.append(migrated.pop(key_key))
+            value_weights.append(migrated.pop(value_key))
+            migrated.pop(f"{head_prefix}.tril", None)
+        else:
+            migrated[qkv_key] = torch.cat(
+                [
+                    torch.cat(query_weights, dim=0),
+                    torch.cat(key_weights, dim=0),
+                    torch.cat(value_weights, dim=0),
+                ],
+                dim=0,
+            )
+
+        migrated.pop(f"{prefix}.tril", None)
+
+    return migrated
 
 
 class FeedForward(nn.Module):
