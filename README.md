@@ -6,21 +6,27 @@ This is a portfolio project designed to show practical understanding of how GPT-
 
 ## Results
 
-I trained a 0.82M parameter version on the Tiny Shakespeare dataset for 1,200 steps.
+I trained a 3.21M parameter version on the Tiny Shakespeare dataset for 3,000 steps. Validation loss improved from `4.2369` to `1.6748`.
 
 ![Training loss curve](assets/loss_curve.png)
 
-| Step | Train loss | Validation loss |
-| ---: | ---: | ---: |
-| 0 | 4.2010 | 4.1996 |
-| 200 | 2.4937 | 2.4969 |
-| 400 | 2.3748 | 2.3757 |
-| 600 | 2.1899 | 2.2053 |
-| 800 | 2.0814 | 2.1080 |
-| 1000 | 2.0038 | 2.0585 |
-| 1199 | 1.9262 | 2.0300 |
+| Step | Train loss | Validation loss | LR |
+| ---: | ---: | ---: | ---: |
+| 0 | 4.2348 | 4.2369 | 1.50e-06 |
+| 300 | 2.4233 | 2.4301 | 2.99e-04 |
+| 600 | 2.0798 | 2.1278 | 2.87e-04 |
+| 900 | 1.8476 | 1.9571 | 2.60e-04 |
+| 1200 | 1.7201 | 1.8677 | 2.24e-04 |
+| 1500 | 1.6490 | 1.8150 | 1.80e-04 |
+| 1800 | 1.5809 | 1.7667 | 1.35e-04 |
+| 2100 | 1.5417 | 1.7218 | 9.32e-05 |
+| 2400 | 1.5034 | 1.7121 | 5.95e-05 |
+| 2700 | 1.4873 | 1.6839 | 3.76e-05 |
+| 2999 | 1.4778 | 1.6748 | 3.00e-05 |
 
-Example generated text is available in [docs/sample_shakespeare.txt](docs/sample_shakespeare.txt). The output is intentionally imperfect because this is a small character-level model trained locally, but it learns Shakespeare-like structure, names, spacing, and word patterns.
+Previous baseline: a 0.82M parameter model trained for 1,200 steps reached `2.0300` validation loss. The larger 3.21M parameter run reduced validation loss by about 17.5%.
+
+Example generated text is available in [docs/sample_shakespeare.txt](docs/sample_shakespeare.txt). The output is intentionally imperfect because this is a small character-level model trained locally, but it learns Shakespeare-like structure, speaker names, line breaks, and word patterns.
 
 ## Features
 
@@ -103,19 +109,19 @@ For a quick smoke test:
 python src/train.py --data data/tiny_sample.txt --max-iters 20 --block-size 32 --batch-size 4 --eval-iters 2
 ```
 
-Command used for the included training result:
+Command used for the included 3,000-step training result:
 
 ```bash
 python src/train.py \
   --data data/shakespeare.txt \
-  --max-iters 1200 \
-  --block-size 64 \
+  --max-iters 3000 \
+  --block-size 128 \
   --batch-size 32 \
-  --eval-iters 25 \
-  --eval-interval 200 \
-  --warmup-iters 100 \
+  --eval-iters 50 \
+  --eval-interval 300 \
+  --warmup-iters 200 \
   --min-lr 3e-5 \
-  --n-embd 128 \
+  --n-embd 256 \
   --n-head 4 \
   --n-layer 4
 ```
