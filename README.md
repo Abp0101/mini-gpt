@@ -43,6 +43,7 @@ Example generated text is available in [docs/sample_shakespeare.txt](docs/sample
 - Linear warmup plus cosine learning-rate decay
 - Best-validation checkpoint saving
 - Temperature and top-k text generation
+- Streamlit browser UI for interactive generation
 - Apple Silicon `mps` acceleration when available
 - Metrics CSV and loss curve export
 
@@ -137,7 +138,7 @@ The script automatically uses:
 ## Generate Text
 
 ```bash
-python src/generate.py --prompt "To be or not to be" --tokens 500
+python src/generate.py --checkpoint outputs/best.pt --prompt "To be or not to be" --tokens 500
 ```
 
 Generated text is written to:
@@ -152,7 +153,7 @@ outputs/sample.txt
 streamlit run app.py
 ```
 
-The UI loads a trained checkpoint from `outputs/`, then lets you change the prompt, generation length, temperature, and top-k sampling value.
+The UI loads a trained checkpoint from `outputs/`, then lets you change the prompt, generation length, temperature, and top-k sampling value. Checkpoints are runtime-generated and ignored by Git, so train the model first if `outputs/best.pt` does not exist locally.
 
 ## Architecture
 
@@ -198,6 +199,7 @@ After training, the model generates text one token at a time by sampling from th
 - Built causal attention masking to enforce autoregressive generation.
 - Added sampling controls with temperature and top-k filtering.
 - Added warmup plus cosine LR scheduling and best-validation checkpointing.
+- Built a Streamlit UI for interactive text generation from saved checkpoints.
 - Used training and validation loss to evaluate model fit.
 - Designed the project to run locally on Apple Silicon using PyTorch MPS.
 
