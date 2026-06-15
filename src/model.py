@@ -49,8 +49,10 @@ def migrate_legacy_attention_state_dict(
     state_dict: dict[str, torch.Tensor],
     config: GPTConfig,
 ) -> dict[str, torch.Tensor]:
-    """Convert old per-head attention checkpoints to the fused qkv format."""
+    """Convert old checkpoints to the current fused-attention, tied-weight format."""
     migrated = dict(state_dict)
+    if "lm_head.weight" not in migrated and "token_embedding_table.weight" in migrated:
+        migrated["lm_head.weight"] = migrated["token_embedding_table.weight"]
     for layer_idx in range(config.n_layer):
         prefix = f"blocks.{layer_idx}.sa"
         qkv_key = f"{prefix}.qkv.weight"
@@ -124,6 +126,9 @@ class GPTLanguageModel(nn.Module):
         self.ln_f = nn.LayerNorm(config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, vocab_size)
         self.apply(self._init_weights)
+        # GPT-style weight tying: token embeddings and output logits use the
+        # same token-vector matrix, saving vocab_size * n_embd parameters.
+        self.lm_head.weight = self.token_embedding_table.weight
 
     def _init_weights(self, module: nn.Module) -> None:
         if isinstance(module, nn.Linear):
