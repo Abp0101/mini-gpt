@@ -52,6 +52,7 @@ Example generated text is available in [docs/sample_shakespeare.txt](docs/sample
 mini-gpt/
   README.md
   LICENSE
+  app.py
   requirements.txt
   assets/
     loss_curve.png
@@ -145,6 +146,14 @@ Generated text is written to:
 outputs/sample.txt
 ```
 
+## Run The UI
+
+```bash
+streamlit run app.py
+```
+
+The UI loads a trained checkpoint from `outputs/`, then lets you change the prompt, generation length, temperature, and top-k sampling value.
+
 ## Architecture
 
 ```mermaid
@@ -203,7 +212,6 @@ Possible improvements:
 - Mixed precision training
 - Weights & Biases experiment tracking
 - Hugging Face model export
-- Streamlit or Gradio demo UI
 
 ## License
 
