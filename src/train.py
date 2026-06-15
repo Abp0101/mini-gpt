@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 from pathlib import Path
 
 import torch
@@ -52,7 +53,34 @@ def estimate_loss(
     return out
 
 
-def plot_losses(history: list[tuple[int, float, float]], output_path: Path) -> None:
+def get_lr(step: int, config: GPTConfig) -> float:
+    if step < config.warmup_iters:
+        return config.learning_rate * (step + 1) / config.warmup_iters
+    if step >= config.max_iters:
+        return config.min_lr
+    decay_ratio = (step - config.warmup_iters) / max(1, config.max_iters - config.warmup_iters)
+    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+    return config.min_lr + coeff * (config.learning_rate - config.min_lr)
+
+
+def save_checkpoint(
+    model: GPTLanguageModel,
+    config: GPTConfig,
+    dataset: CharDataset,
+    checkpoint_path: Path,
+) -> None:
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "config": config,
+            "chars": dataset.tokenizer.chars,
+        },
+        checkpoint_path,
+    )
+
+
+def plot_losses(history: list[tuple[int, float, float, float]], output_path: Path) -> None:
     if not history or plt is None:
         return
     steps = [item[0] for item in history]
@@ -77,6 +105,9 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--eval-iters", type=int, default=None)
     parser.add_argument("--eval-interval", type=int, default=None)
+    parser.add_argument("--learning-rate", type=float, default=None)
+    parser.add_argument("--warmup-iters", type=int, default=None)
+    parser.add_argument("--min-lr", type=float, default=None)
     parser.add_argument("--n-embd", type=int, default=None)
     parser.add_argument("--n-head", type=int, default=None)
     parser.add_argument("--n-layer", type=int, default=None)
@@ -94,6 +125,12 @@ def main() -> None:
         config.eval_iters = args.eval_iters
     if args.eval_interval is not None:
         config.eval_interval = args.eval_interval
+    if args.learning_rate is not None:
+        config.learning_rate = args.learning_rate
+    if args.warmup_iters is not None:
+        config.warmup_iters = args.warmup_iters
+    if args.min_lr is not None:
+        config.min_lr = args.min_lr
     if args.n_embd is not None:
         config.n_embd = args.n_embd
     if args.n_head is not None:
@@ -120,13 +157,25 @@ def main() -> None:
     print(f"Parameters: {sum(p.numel() for p in model.parameters()) / 1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
-    history: list[tuple[int, float, float]] = []
+    history: list[tuple[int, float, float, float]] = []
+    best_val_loss = float("inf")
 
     for step in trange(config.max_iters):
+        lr = get_lr(step, config)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+
         if step % config.eval_interval == 0 or step == config.max_iters - 1:
             losses = estimate_loss(model, dataset, config, device)
-            history.append((step, losses["train"], losses["val"]))
-            print(f"step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            history.append((step, losses["train"], losses["val"], lr))
+            print(
+                f"step {step}: train loss {losses['train']:.4f}, "
+                f"val loss {losses['val']:.4f}, lr {lr:.2e}"
+            )
+            if losses["val"] < best_val_loss:
+                best_val_loss = losses["val"]
+                save_checkpoint(model, config, dataset, Path(config.best_checkpoint_path))
+                print(f"saved new best checkpoint to {config.best_checkpoint_path}")
 
         xb, yb = dataset.get_batch("train", config.batch_size, device)
         _, loss = model(xb, yb)
@@ -135,22 +184,15 @@ def main() -> None:
         optimizer.step()
 
     checkpoint_path = Path(config.checkpoint_path)
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model_state_dict": model.state_dict(),
-            "config": config,
-            "chars": dataset.tokenizer.chars,
-        },
-        checkpoint_path,
-    )
+    save_checkpoint(model, config, dataset, checkpoint_path)
     metrics_path = Path("outputs/metrics.csv")
     with metrics_path.open("w", newline="", encoding="utf-8") as metrics_file:
         writer = csv.writer(metrics_file)
-        writer.writerow(["step", "train_loss", "val_loss"])
+        writer.writerow(["step", "train_loss", "val_loss", "lr"])
         writer.writerows(history)
     plot_losses(history, Path("outputs/loss_curve.png"))
     print(f"Saved checkpoint to {checkpoint_path}")
+    print(f"Best validation loss: {best_val_loss:.4f}")
     print(f"Saved metrics to {metrics_path}")
     if plt is not None:
         print("Saved loss curve to outputs/loss_curve.png")

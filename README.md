@@ -27,21 +27,25 @@ Example generated text is available in [docs/sample_shakespeare.txt](docs/sample
 - Character-level tokenizer
 - Train/validation data split
 - Causal masked self-attention
-- Multi-head attention
+- Batched multi-head attention with a fused QKV projection
+- GPT-style weight tying between token embeddings and output logits
 - Feed-forward network
 - Residual connections
 - Layer normalization
 - Dropout
 - Autoregressive next-token training
+- Linear warmup plus cosine learning-rate decay
+- Best-validation checkpoint saving
 - Temperature and top-k text generation
 - Apple Silicon `mps` acceleration when available
-- Loss curve export
+- Metrics CSV and loss curve export
 
 ## Project Structure
 
 ```text
 mini-gpt/
   README.md
+  LICENSE
   requirements.txt
   assets/
     loss_curve.png
@@ -57,9 +61,11 @@ mini-gpt/
     generate.py
     model.py
     train.py
-  outputs/
+  outputs/              # runtime-generated and ignored by Git
+    best.pt
     checkpoint.pt
     loss_curve.png
+    metrics.csv
     sample.txt
   notebooks/
 ```
@@ -107,6 +113,8 @@ python src/train.py \
   --batch-size 32 \
   --eval-iters 25 \
   --eval-interval 200 \
+  --warmup-iters 100 \
+  --min-lr 3e-5 \
   --n-embd 128 \
   --n-head 4 \
   --n-layer 4
@@ -149,6 +157,12 @@ MiniGPT is trained to predict the next character in a sequence. For each input s
 
 The model uses causal self-attention, which means each token can only attend to itself and earlier tokens. This prevents the model from seeing the future during training and matches how generation works at inference time.
 
+The attention implementation uses one fused QKV projection and reshapes the result into separate heads. This is mathematically equivalent to running independent attention heads and concatenating them, but it is closer to production transformer implementations.
+
+The language-model head shares weights with the token embedding table. This GPT-style weight tying reduces parameters because the same token-vector matrix is used for input embeddings and output logits.
+
+Training uses linear warmup followed by cosine learning-rate decay. The trainer also writes `outputs/best.pt` whenever validation loss improves, while `outputs/checkpoint.pt` remains the final checkpoint from the end of training.
+
 Each transformer block contains:
 
 - layer normalization
@@ -165,6 +179,7 @@ After training, the model generates text one token at a time by sampling from th
 - Implemented a decoder-only transformer from scratch in PyTorch.
 - Built causal attention masking to enforce autoregressive generation.
 - Added sampling controls with temperature and top-k filtering.
+- Added warmup plus cosine LR scheduling and best-validation checkpointing.
 - Used training and validation loss to evaluate model fit.
 - Designed the project to run locally on Apple Silicon using PyTorch MPS.
 
@@ -177,7 +192,6 @@ Possible improvements:
 - Byte-pair encoding tokenizer
 - Larger dataset
 - Mixed precision training
-- Learning-rate scheduling
 - Weights & Biases experiment tracking
 - Hugging Face model export
 - Streamlit or Gradio demo UI
