@@ -61,6 +61,8 @@ mini-gpt/
   docs/
     metrics.csv
     sample_shakespeare.txt
+  notebooks/
+    explanation.ipynb
   src/
     config.py
     dataset.py
@@ -73,7 +75,6 @@ mini-gpt/
     loss_curve.png
     metrics.csv
     sample.txt
-  notebooks/
 ```
 
 ## Setup
@@ -156,6 +157,8 @@ flowchart LR
     F --> G[Linear language-model head]
     G --> H[Next-character logits]
 ```
+
+For a step-by-step walkthrough of causal masking and multi-head attention, see [notebooks/explanation.ipynb](notebooks/explanation.ipynb).
 
 ## How It Works
 
